@@ -41,8 +41,54 @@ function M.match(str, patterns)
     return
   end
 
+  -- Check for markdown checklist format specifically
+  local checklist_match = str:match("^%s*([%-+*]%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+  local numbered_match = str:match("^%s*(%d+%.%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+  
+  if checklist_match or numbered_match then
+    local prefix, status, content
+    if checklist_match then
+      prefix, status, content = str:match("^%s*([%-+*]%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+    else
+      prefix, status, content = str:match("^%s*(%d+%.%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+    end
+    
+    if status then
+      -- Map status to appropriate tag
+      local tag
+      if status == "" or status == " " then
+        tag = "TODO"  -- Unchecked
+      elseif status:lower() == "x" then
+        tag = "DONE"  -- Checked
+      elseif status == ">" then
+        tag = "IN_PROGRESS"  -- In progress
+      elseif status == "?" then
+        tag = "QUESTION"  -- Questionable
+      elseif status == "!" then
+        tag = "IMPORTANT"  -- Important
+      else
+        tag = "TODO"  -- Default for other statuses
+      end
+      
+      -- Find the position of the checklist item (the checkbox part)
+      local start_pos = str:find("[%-%+*]%s*%[", 1, true)
+      if not start_pos then
+        start_pos = str:find("%d+%.%s*%[", 1, true)
+      end
+      
+      if start_pos then
+        -- Find the end of the checkbox part [ ]
+        local end_pos = str:find("%]", start_pos)
+        if end_pos then
+          return start_pos - 1, end_pos, tag  -- Return 0-indexed positions
+        end
+      end
+    end
+  end
+
+  -- Fallback to the original pattern matching approach
   patterns = patterns or Config.hl_regex
-  if not type(patterns) == "table" then
+  if not (type(patterns) == "table") then
     patterns = { patterns }
   end
 

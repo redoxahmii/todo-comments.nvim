@@ -4,16 +4,11 @@ local Util = require("todo-comments.util")
 
 local M = {}
 
-local function keywords_filter(opts_keywords)
-  assert(not opts_keywords or type(opts_keywords) == "string", "'keywords' must be a comma separated string or nil")
-  local all_keywords = vim.tbl_keys(Config.keywords)
-  if not opts_keywords then
-    return all_keywords
-  end
-  local filters = vim.split(opts_keywords, ",")
-  return vim.tbl_filter(function(kw)
-    return vim.tbl_contains(filters, kw)
-  end, all_keywords)
+local function status_filter(opts_status)
+  -- For markdown checklists, we handle filtering differently
+  -- This function could filter by checklist status if needed
+  -- For now, return nil to indicate no filtering
+  return nil
 end
 
 function M.process(lines)
@@ -28,14 +23,40 @@ function M.process(lines)
         line = text,
       }
 
-      local start, finish, kw = Highlight.match(text)
-
-      if start then
-        kw = Config.keywords[kw] or kw
-        item.tag = kw
-        item.text = vim.trim(text:sub(start))
-        item.message = vim.trim(text:sub(finish + 1))
-        table.insert(results, item)
+      -- Parse markdown checklist format: [-+*]|[0-9]+\. \[[- x/<>?!*"lb~]\] .+
+      local checklist_match = text:match("^%s*([%-+*]%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+      local numbered_match = text:match("^%s*(%d+%.%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+      
+      if checklist_match or numbered_match then
+        local prefix, status, content
+        if checklist_match then
+          prefix, status, content = text:match("^%s*([%-+*]%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+        else
+          prefix, status, content = text:match("^%s*(%d+%.%s*)%[%s*([xX/<>?!*\"lb~]-)%s*%]%s*(.*)$")
+        end
+        
+        if status then
+          -- Map status to appropriate tag
+          local tag
+          if status == "" or status == " " then
+            tag = "TODO"  -- Unchecked
+          elseif status:lower() == "x" then
+            tag = "DONE"  -- Checked
+          elseif status == ">" then
+            tag = "IN_PROGRESS"  -- In progress
+          elseif status == "?" then
+            tag = "QUESTION"  -- Questionable
+          elseif status == "!" then
+            tag = "IMPORTANT"  -- Important
+          else
+            tag = "TODO"  -- Default for other statuses
+          end
+          
+          item.tag = tag
+          item.text = vim.trim(text)
+          item.message = vim.trim(content)
+          table.insert(results, item)
+        end
       end
     end
   end
@@ -67,7 +88,7 @@ function M.search(cb, opts)
 
   local args = {}
   vim.list_extend(args, Config.options.search.args)
-  vim.list_extend(args, { Config.search_regex(keywords_filter(opts.keywords)), opts.cwd })
+  vim.list_extend(args, { Config.search_regex(), opts.cwd })
 
   Job:new({
     command = command,
@@ -91,7 +112,7 @@ local function parse_opts(opts)
     return opts
   end
   return {
-    keywords = opts:match("keywords=(%S*)"),
+    status = opts:match("status=(%S*)"),  -- For markdown, we might filter by status
     cwd = opts:match("cwd=(%S*)"),
   }
 end

@@ -7,7 +7,7 @@ local Highlight = require("todo-comments.highlight")
 local M = {}
 
 ---@class snacks.picker.todo.Config: snacks.picker.grep.Config
----@field keywords? string[]
+---@field status? string[]  -- For markdown checklists, filter by status (TODO, DONE, etc.)
 
 ---@type snacks.picker.todo.Config|{}
 M.source = {
@@ -15,12 +15,8 @@ M.source = {
   live = false,
   supports_live = true,
   search = function(picker)
-    local opts = picker.opts --[[@as snacks.picker.todo.Config]]
-    ---@type string[]
-    local keywords = vim.tbl_filter(function(kw)
-      return Config.keywords[kw]
-    end, opts.keywords or vim.tbl_keys(Config.keywords))
-    return ({ Config.search_regex(keywords) })[1]
+    -- For markdown checklists, we use the fixed pattern instead of keywords
+    return Config.search_regex()
   end,
   ---@param item snacks.picker.Item
   ---@param picker snacks.Picker
