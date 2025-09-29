@@ -9,16 +9,16 @@ local Highlight = require("todo-comments.highlight")
 local make_entry = require("telescope.make_entry")
 local pickers = require("telescope.builtin")
 
-local function keywords_filter(opts_keywords)
-  assert(not opts_keywords or type(opts_keywords) == "string", "'keywords' must be a comma separated string or nil")
-  local all_keywords = vim.tbl_keys(Config.keywords)
-  if not opts_keywords then
-    return all_keywords
+local function status_filter(opts_status)
+  -- For markdown checklists, we handle filtering differently
+  if not opts_status then
+    return nil
   end
-  local filters = vim.split(opts_keywords, ",")
-  return vim.tbl_filter(function(kw)
-    return vim.tbl_contains(filters, kw)
-  end, all_keywords)
+  local filters = vim.split(opts_status, ",")
+  for i, s in ipairs(filters) do
+    filters[i] = vim.trim(s)
+  end
+  return filters
 end
 
 local function todo(opts)
@@ -26,12 +26,28 @@ local function todo(opts)
   opts.vimgrep_arguments = { Config.options.search.command }
   vim.list_extend(opts.vimgrep_arguments, Config.options.search.args)
 
-  opts.search = Config.search_regex(keywords_filter(opts.keywords))
+  -- Use the fixed regex for markdown checklists, filtering happens after
+  opts.search = Config.search_regex()
   opts.prompt_title = "Find Todo"
   opts.use_regex = true
   local entry_maker = make_entry.gen_from_vimgrep(opts)
   opts.entry_maker = function(line)
     local ret = entry_maker(line)
+    -- Apply status filtering by checking if the entry matches the required status
+    local status_filters = status_filter(opts.status)
+    if status_filters then
+      local _, _, kw = Highlight.match(ret.text)
+      if kw and vim.tbl_contains(status_filters, kw) then
+        -- Entry matches filters, continue processing
+      elseif kw then
+        -- Entry doesn't match filters, return nil to skip this entry
+        return nil
+      else
+        -- No keyword found, skip this entry
+        return nil
+      end
+    end
+
     ret.display = function(entry)
       local display = string.format("%s:%s:%s ", entry.filename, entry.lnum, entry.col)
       local text = entry.text

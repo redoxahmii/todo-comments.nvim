@@ -21,17 +21,35 @@ M.source = {
   ---@param item snacks.picker.Item
   ---@param picker snacks.Picker
   format = function(item, picker)
-    local a = Snacks.picker.util.align
     local _, _, kw = Highlight.match(item.text)
-    local ret = {} ---@type snacks.picker.Highlights
+
+    -- Get the standard file formatting first
+    local file_parts = Snacks.picker.format.file(item, picker) or {}
+
+    -- Create todo-specific prefix parts
+    local prefix_parts = {}
     if kw then
       kw = Config.keywords[kw] or kw
       local icon = vim.tbl_get(Config.options.keywords, kw, "icon") or ""
-      ret[#ret + 1] = { a(icon, 2), "TodoFg" .. kw }
-      ret[#ret + 1] = { a(kw, 6, { align = "center" }), "TodoBg" .. kw }
-      ret[#ret + 1] = { " " }
+
+      if icon and icon ~= "" then
+        -- Add icon with highlight
+        table.insert(prefix_parts, { icon, "TodoFg" .. kw })
+        -- Add a single space
+        table.insert(prefix_parts, { " ", nil })
+        -- Add keyword with highlight
+        table.insert(prefix_parts, { kw, "TodoBg" .. kw })
+        -- Add another space
+        table.insert(prefix_parts, { " ", nil })
+      end
     end
-    return vim.list_extend(ret, Snacks.picker.format.file(item, picker))
+
+    -- Insert prefix parts at the beginning of file_parts
+    for i = #prefix_parts, 1, -1 do
+      table.insert(file_parts, 1, prefix_parts[i])
+    end
+
+    return file_parts
   end,
   previewer = function(ctx)
     Snacks.picker.preview.file(ctx)

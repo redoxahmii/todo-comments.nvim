@@ -4,14 +4,25 @@ local Util = require("todo-comments.util")
 
 local M = {}
 
-local function status_filter(opts_status)
-  -- For markdown checklists, we handle filtering differently
-  -- This function could filter by checklist status if needed
-  -- For now, return nil to indicate no filtering
-  return nil
+local function status_filter(statuses)
+  if not statuses then
+    return nil
+  end
+  
+  -- Split comma-separated statuses
+  local status_list = vim.split(statuses, ",")
+  -- Trim whitespace from each status
+  for i, s in ipairs(status_list) do
+    status_list[i] = vim.trim(s)
+  end
+  
+  return status_list
 end
 
-function M.process(lines)
+function M.process(lines, opts)
+  opts = opts or {}
+  local status_filters = status_filter(opts.status)
+  
   local results = {}
   for _, line in pairs(lines) do
     local file, row, col, text = line:match("^(.+):(%d+):(%d+):(.*)$")
@@ -52,10 +63,13 @@ function M.process(lines)
             tag = "TODO"  -- Default for other statuses
           end
           
-          item.tag = tag
-          item.text = vim.trim(text)
-          item.message = vim.trim(content)
-          table.insert(results, item)
+          -- Apply status filtering if specified
+          if status_filters == nil or vim.tbl_contains(status_filters, tag) then
+            item.tag = tag
+            item.text = vim.trim(text)
+            item.message = vim.trim(content)
+            table.insert(results, item)
+          end
         end
       end
     end
@@ -102,7 +116,7 @@ function M.search(cb, opts)
         Util.warn("no todos found")
       end
       local lines = j:result()
-      cb(M.process(lines))
+      cb(M.process(lines, opts))
     end),
   }):start()
 end
